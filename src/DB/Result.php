@@ -9,75 +9,90 @@ class Result
     public $length = 0;
     public $rows = [];
 
-    function __construct()
+    public function __construct()
     {
         foreach (func_get_args() as $arg) {
-            $this->push($arg);
+            if (method_exists($arg, 'getRows')) {
+                $this->push($arg->getRows());
+            } else {
+                $this->push($arg);
+            }
         }
     }
-    function cmp($a, $b)
+    private function cmp($aitem, $bitem)
     {
-        if (!array_key_exists($this->_sortKey, $a)) {
+        if (!array_key_exists($this->_sortKey, $aitem)) {
             return -$this->_sortVal;
-        } elseif (!array_key_exists($this->_sortKey, $b)) {
+        } elseif (!array_key_exists($this->_sortKey, $bitem)) {
             return -$this->_sortVal;
         }
-        if (is_string($a[$this->_sortKey]) && is_string($b[$this->_sortKey])) {
-            return strcoll($a[$this->_sortKey], $b[$this->_sortKey]) * $this->_sortVal;
-        }
-        else {
-            return $a[$this->_sortKey] > $b[$this->_sortKey] ? $this->_sortVal : -$this->_sortVal;
+        if (is_string($aitem[$this->_sortKey]) && is_string($bitem[$this->_sortKey])) {
+            return strcoll($aitem[$this->_sortKey], $bitem[$this->_sortKey]) * $this->_sortVal;
+        } else {
+            return $aitem[$this->_sortKey] > $bitem[$this->_sortKey] ? $this->_sortVal : -$this->_sortVal;
         }
     }
-    function push($object)
+    public function push($object)
     {
-        if (is_object($object) || is_array($object))
-        {
-            $this->rows = Helper::jsonDecode(json_encode($object), true);
-        }
-        $this->length = count($this->rows);
+        $this->rows = Helper::jsonDecode(json_encode($object), true);
+        $this->length = $this->count();
         return $this;
     }
-    function sort($object)
+    public function sort($object)
     {
         $object = Helper::jsonDecode($object, true);
-
         $this->_sortKey = Helper::firstKey($object);
         $this->_sortVal = $object[$this->_sortKey];
 
-        usort($this->rows, array('\rollingWolf\QueryablePHP\DB\Result', 'cmp'));
+        uasort($this->rows, array('\rollingWolf\QueryablePHP\DB\Result', 'cmp'));
 
         return $this;
     }
-    function limit($_l)
+    public function limit($limit)
     {
-        $lim = intval($_l);
-        if (!is_numeric($lim))
+        $lim = intval($limit);
+        if (!is_numeric($lim)) {
             return $this;
-        $this->rows = array_splice($this->rows, $lim, count($this->rows) - $lim);
-        $this->length = count($this->rows);
+        }
+        //$this->rows = array_splice($this->rows, $lim, count($this->rows) - $lim);
+        array_splice($this->rows, $lim, count($this->rows) - $lim);
+        foreach ($this->rows as $row) {
+            $newrows[$row['_id']] = $row;
+        }
+        $this->rows = $newrows;
+        $this->length = $this->count();
 
         return $this;
     }
-    function skip($s)
+    public function skip($skipAmt)
     {
-        $skp = intval($s);
-        if (!is_numeric($skp))
+        $skip = intval($skipAmt);
+        if (!is_numeric($skip)) {
             return $this;
-        $this->rows = array_splice($this->rows, 0, $skp);
-        $this->length = count($this->rows);
+        }
+        //$this->rows = array_splice($this->rows, 0, $skip);
+        array_splice($this->rows, 0, $skip);
+        foreach ($this->rows as $row) {
+            $newrows[$row['_id']] = $row;
+        }
+        $this->rows = $newrows;
+        $this->length = $this->count();
 
         return $this;
     }
-    function count()
+    public function count()
     {
-        return count($this->rows);
+        if (is_array($this->rows)) {
+            return count($this->rows);
+        }
+
+        return false;
     }
-    function getArray()
+    public function getArray()
     {
         return $this->rows;
     }
-    function getJSON()
+    public function getJSON()
     {
         return json_encode($this->rows);
     }
