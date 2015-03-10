@@ -10,13 +10,7 @@ $DB = \rollingWolf\QueryablePHP\QueryablePHP::open(array('dbName' => 'test.db', 
 //$DB->update('{comment:"/don\'t HAVE/i"}', '{$set: {something:"other"}}');
 //$DB->update('{president:"/^J/"}', '{$set: {a:"b"}}', '{multi:true}');
 
-$DB->insert(array(
-'hej' => 'haha',
-'sak' => array(
-        'test' => 'samma'
-    )
-));
-print_r($DB->find('{took_office:"/^(?!18)../"}'));
-
+print_r($DB->find());
+echo $DB->getID();
 //$DB->save();
 

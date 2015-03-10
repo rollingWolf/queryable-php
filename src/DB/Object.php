@@ -192,6 +192,7 @@ class Object
             $match = [];
         }
         $match = Helper::jsonDecode($match);
+
         if (!is_array($match)) {
             throw new QueryablePHPException('Find: usage: find([match], [callback])');
         }
@@ -560,9 +561,9 @@ class Object
         if ((is_array($clauses) && Helper::firstKey($clauses) === null)) {
             return $result;
         }
-
         foreach ($clauses as $key => $clause) {
             $clausetype = $this->_detectClauseType($key, $clause);
+
             switch ($clausetype) {
                 case self::CLAUSE_NORMAL:
                     $result = $this->_matchingRowsNormal('{"key": "'.$key.'", "value": "'.$clause.'"}', $result);
