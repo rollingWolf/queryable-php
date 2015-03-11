@@ -24,6 +24,8 @@ class Object
     const CLAUSE_SUBDOCUMENT = 4;
     const CLAUSE_OR = 5;
     const CLAUSE_ARRAY = 6;
+    const CLAUSE_AND = 7;
+    const CLAUSE_NOT = 8;
     const REGEXP_STRING = '~^(?P<del>.).+(?P=del)([imsxeUu]+)?$~';
 
     public function __construct($config)
@@ -34,8 +36,8 @@ class Object
         $this->dbFile = $this->dbDir.DIRECTORY_SEPARATOR.$this->dbName;
         $this->useGzip = $config['useGzip'];
 
-        if ($config['data']) {
-            if (is_array($config['data'])) {
+        if (array_key_exists('data', $config)) {
+            if (is_array($config['data']) || is_object($config['data'])) {
                 $this->master->load($config['data']);
             } elseif (is_string($config['data'])) {
                 $this->master->load(Helper::jsonDecode($config['data']));
@@ -317,6 +319,9 @@ class Object
                 break;
             case 'array':
                 $fk = Helper::firstKey($value);
+                if (!$fk) {
+                    $fk = $key;
+                }
                 switch ($fk) {
                     case '$gt':
                     case '$gte':
@@ -324,7 +329,15 @@ class Object
                     case '$lte':
                     case '$exists':
                     case '$ne':
+                    case '$in':
+                    case '$nin':
                         return self::CLAUSE_CONDITIONAL;
+                        break;
+                    case '$and':
+                        return self::CLAUSE_AND;
+                        break;
+                    case '$not':
+                        return self::CLAUSE_NOT;
                         break;
                     case '$or':
                         return self::CLAUSE_OR;
@@ -334,9 +347,6 @@ class Object
                         //return self::CLAUSE_SUBDOCUMENT;
                         break;
                 }
-                break;
-            case 'array':
-                return ($key === '$or') ? self::CLAUSE_OR : self::CLAUSE_ARRAY;
                 break;
             default:
                 break;
@@ -385,15 +395,16 @@ class Object
     private function _matchingRowsConditional()
     {
         $res = [];
-        $breakOut = [];
         $test = @Helper::jsonDecode(func_get_arg(0));
         if (!is_array($test) && !(array_key_exists('value', $test) && array_key_exists('key', $test))) {
             return $res;
         }
+
         $cond = Helper::firstKey($test['value']);
         if (false === $rows = @func_get_arg(1)) {
             $rows = [];
         }
+
         foreach ($rows as $i => $row) {
             if ($cond === '$exists') {
                 if ($test['value'][$cond]) {
@@ -419,51 +430,56 @@ class Object
                     continue;
                 }
             }
-            foreach ($row as $key => $value) {
-                if (isset($breakOut[$i]) && $breakOut[$i] === true) {
-                    break;
-                }
-                if ($key === $test['key']) {
-                    switch ($cond) {
-                        case '$lt':
-                            if ($value < $test['value'][$cond]) {
-                                $res[$row['_id']] = $row;
-                                $breakOut[$i] = true;
-                                continue;
-                            }
-                            break;
-                        case '$lte':
-                            if ($value <= $test['value'][$cond]) {
-                                $res[$row['_id']] = $row;
-                                $breakOut[$i] = true;
-                                continue;
-                            }
-                            break;
-                        case '$gt':
-                            if ($value > $test['value'][$cond]) {
-                                $res[$row['_id']] = $row;
-                                $breakOut[$i] = true;
-                                continue;
-                            }
-                            break;
-                        case '$gte':
-                            if ($value >= $test['value'][$cond]) {
-                                $res[$row['_id']] = $row;
-                                $breakOut[$i] = true;
-                                continue;
-                            }
-                            break;
-                        case '$ne':
-                            if ($value !== $test['value'][$cond]) {
-                                $res[$row['_id']] = $row;
-                                $breakOut[$i] = true;
-                                continue;
-                            }
-                            break;
-                        default:
-                            break;
+            $value = array_key_exists($test['key'], $row) ? $row[$test['key']] : false;
+            if (!$value) {
+                return $res;
+            }
+
+            switch ($cond) {
+                case '$in':
+                    if (strstr($value, $test['value'][$cond])) {
+                        $res[$row['_id']] = $row;
+                        continue;
                     }
-                }
+                    break;
+                case '$nin':
+                    if (!strstr($value, $test['value'][$cond])) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                case '$lt':
+                    if ($value < $test['value'][$cond]) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                case '$lte':
+                    if ($value <= $test['value'][$cond]) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                case '$gt':
+                    if ($value > $test['value'][$cond]) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                case '$gte':
+                    if ($value >= $test['value'][$cond]) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                case '$ne':
+                    if ($value !== $test['value'][$cond]) {
+                        $res[$row['_id']] = $row;
+                        continue;
+                    }
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -473,7 +489,6 @@ class Object
     {
         $res = [];
         $breakOut = [];
-
         foreach ($rows as $i => $row) {
             foreach ($array as $j => $av) {
                 if (isset($breakOut[$i]) && $breakOut[$i] === true) {
@@ -481,6 +496,7 @@ class Object
                 }
                 $eltkey = Helper::firstKey($av);
                 $eltval = $av[$eltkey];
+
                 $test = [];
                 $test['key'] = $eltkey;
                 $test['value'] = $eltval;
@@ -504,6 +520,20 @@ class Object
                         break;
                     case self::CLAUSE_CONDITIONAL:
                         switch (Helper::firstKey($test['value'])) {
+                            case '$in':
+                                if (strstr($row[$test['key']], $test['value']['$in'])) {
+                                    $res[$row['_id']] = $row;
+                                    $breakOut[$i] = true;
+                                    continue;
+                                }
+                                break;
+                            case '$nin':
+                                if (!strstr($row[$test['key']], $test['value']['$nin'])) {
+                                    $res[$row['_id']] = $row;
+                                    $breakOut[$i] = true;
+                                    continue;
+                                }
+                                break;
                             case '$gt':
                                 if ($row[$test['key']] > $test['value']['$gt']) {
                                     $res[$row['_id']] = $row;
@@ -553,6 +583,102 @@ class Object
 
         return $res;
     }
+    private function _matchingRowsAnd($array, $rows)
+    {
+        $res = [];
+        $breakOut = [];
+        foreach ($rows as $i => $row) {
+            if (isset($breakOut[$i]) && $breakOut[$i] === true) {
+                break;
+            }
+            $eltkey = Helper::firstKey($array);
+            $eltval = $array[$eltkey];
+
+            $test = [];
+            $test['key'] = $eltkey;
+            $test['value'] = $eltval;
+
+            $clausetype = $this->_detectClauseType($eltkey, $eltval);
+            switch ($clausetype) {
+                case self::CLAUSE_NORMAL:
+                    if (preg_match(self::REGEXP_STRING, $test['value'])) {
+                        if (array_key_exists($test['key'], $row) && preg_match($test['value'], $row[$test['key']])) {
+                            $res[$row['_id']] = $row;
+                            $breakOut[$i] = true;
+                            continue;
+                        }
+                    } else {
+                        if ($row[$test['key']] === $test['value']) {
+                            $res[$row['_id']] = $row;
+                            $breakOut[$i] = true;
+                            continue;
+                        }
+                    }
+                    break;
+                case self::CLAUSE_CONDITIONAL:
+                    switch (Helper::firstKey($test['value'])) {
+                        case '$in':
+                            if (strstr($row[$test['key']], $test['value']['$in'])) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$nin':
+                            if (!strstr($row[$test['key']], $test['value']['$nin'])) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$gt':
+                            if ($row[$test['key']] > $test['value']['$gt']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$gte':
+                            if ($row[$test['key']] >= $test['value']['$gt']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$lt':
+                            if ($row[$test['key']] < $test['value']['$gt']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$lte':
+                            if ($row[$test['key']] <= $test['value']['$gt']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                        case '$exists':
+                            if (isset($row[$test['key']]) && $test['value']['$exists']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            } elseif (!isset($row[$test['key']]) && !$test['value']['$exists']) {
+                                $res[$row['_id']] = $row;
+                                $breakOut[$i] = true;
+                                continue;
+                            }
+                            break;
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        return $res;
+    }
     private function _doQuery()
     {
         $result = $this->master->getRows();
@@ -574,6 +700,11 @@ class Object
                 case self::CLAUSE_OR:
                     $result = $this->_matchingRowsOr($clause, $result);
                     break;
+                case self::CLAUSE_AND:
+                    foreach ($clause as $subclause) {
+                        $result = $this->_matchingRowsAnd($subclause, $result);
+                    }
+
                 default:
                     break;
             }

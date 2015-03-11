@@ -2,13 +2,10 @@
     "name": "rollingwolf/queryable-php",
     "type": "library",
     "description": "QueryablePHP is a PHP port of the node lib Queryable",
-<<<<<<< HEAD
     "keywords": ["json", "database"],
     "homepage": "http://github.com/rollingwolf/queryablephp",
-=======
     "keywords": ["json", "database", "nosql"],
     "homepage": "https://github.com/rollingwolf/queryable-php",
->>>>>>> 7ed8e9e480752064cf31a16bbf4b12d8b188a29c
     "license": "MIT",
 
     "authors": [
@@ -20,11 +17,7 @@
     ],
 
     "require": {
-<<<<<<< HEAD
         "php": ">=5.5"
-=======
-        "php": ">=5.4"
->>>>>>> 7ed8e9e480752064cf31a16bbf4b12d8b188a29c
     },
 
     "autoload": {
@@ -35,7 +28,7 @@
 
     "extra": {
         "branch-alias": {
-            "dev-master": "1.0-dev"
+            "dev-master": "1.0.1-dev"
         }
     }
 }

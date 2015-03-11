@@ -11,6 +11,5 @@ $DB = \rollingWolf\QueryablePHP\QueryablePHP::open(array('dbName' => 'test.db', 
 //$DB->update('{president:"/^J/"}', '{$set: {a:"b"}}', '{multi:true}');
 
 print_r($DB->find());
-echo $DB->getID();
-//$DB->save();
 
+//$DB->save();
